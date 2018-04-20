@@ -1,0 +1,12 @@
+[package]
+name = "lending-library"
+version = "0.1.0"
+authors = ["Thomas Bytheway <tb403@cam.ac.uk>"]
+description = "A key-value store that loans full ownership of items."
+documentation = "https://docs.rs/lending-library/"
+repository = "https://github.com/HarkonenBade/lending-library"
+categories = ["data-structures"]
+readme = "README.md"
+license = "Apache-2.0"
+
+[dependencies]
