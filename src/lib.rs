@@ -42,6 +42,26 @@ where
             outstanding: AtomicUsize::new(0),
         }
     }
+
+    pub fn with_capacity(capacity: usize) -> LendingLibrary<K, V> {
+        LendingLibrary {
+            store: HashMap::with_capacity(capacity),
+            outstanding: AtomicUsize::new(0),
+        }
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.store.capacity()
+    }
+
+    pub fn reserve(&mut self, additional: usize) {
+        self.store.reserve(additional)
+    }
+
+    pub fn shrink_to_fit(&mut self) {
+        self.store.shrink_to_fit()
+    }
+
     pub fn contains_key(&self, key: K) -> bool {
         match self.store.get(&key) {
             Some(v) => match *v {
@@ -276,6 +296,18 @@ mod tests {
             assert!(!s.contains_key(2));
         }
         assert_eq!(s.outstanding.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn capacity() {
+        let mut s: LendingLibrary<i64, i64> = LendingLibrary::new();
+        assert_eq!(s.capacity(), 0);
+        s.reserve(10);
+        assert!(s.capacity() >= 10);
+        s = LendingLibrary::with_capacity(10);
+        assert!(s.capacity() >= 10);
+        s.shrink_to_fit();
+        assert_eq!(s.capacity(), 0);
     }
 
     #[test]
