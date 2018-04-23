@@ -62,6 +62,14 @@ where
         self.store.shrink_to_fit()
     }
 
+    pub fn iter<'a>(&'a self) -> Iter<'a, K, V> {
+        self.into_iter()
+    }
+
+    pub fn iter_mut<'a>(&'a mut self) -> IterMut<'a, K, V> {
+        self.into_iter()
+    }
+
     pub fn len(&self) -> usize {
         self.store
             .iter()
@@ -163,7 +171,7 @@ where
     K: Hash + Eq + Copy + 'a,
     V: 'a,
 {
-    iter: Box<Iterator<Item=(&'a K, &'a V)> + 'a>,
+    iter: Box<Iterator<Item = (&'a K, &'a V)> + 'a>,
 }
 
 impl<'a, K, V> Iter<'a, K, V>
@@ -192,6 +200,40 @@ where
     }
 }
 
+pub struct IterMut<'a, K, V>
+where
+    K: Hash + Eq + Copy + 'a,
+    V: 'a,
+{
+    iter: Box<Iterator<Item = (&'a K, &'a mut V)> + 'a>,
+}
+
+impl<'a, K, V> IterMut<'a, K, V>
+where
+    K: Hash + Eq + Copy + 'a,
+    V: 'a,
+{
+    fn new(val: &'a mut LendingLibrary<K, V>) -> Self {
+        IterMut {
+            iter: Box::new(val.store.iter_mut().map(|(k, v)| match *v {
+                State::Present(ref mut v) => (k, v),
+                _ => panic!("Trying to iterate over a store with loaned items."),
+            })),
+        }
+    }
+}
+
+impl<'a, K, V> Iterator for IterMut<'a, K, V>
+where
+    K: Hash + Eq + Copy + 'a,
+    V: 'a,
+{
+    type Item = (&'a K, &'a mut V);
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next()
+    }
+}
+
 impl<'a, K, V> IntoIterator for &'a LendingLibrary<K, V>
 where
     K: Hash + Eq + Copy + 'a,
@@ -200,7 +242,19 @@ where
     type Item = (&'a K, &'a V);
     type IntoIter = Iter<'a, K, V>;
     fn into_iter(self) -> Self::IntoIter {
-        Iter::new(&self)
+        Iter::new(self)
+    }
+}
+
+impl<'a, K, V> IntoIterator for &'a mut LendingLibrary<K, V>
+where
+    K: Hash + Eq + Copy + 'a,
+    V: 'a,
+{
+    type Item = (&'a K, &'a mut V);
+    type IntoIter = IterMut<'a, K, V>;
+    fn into_iter(self) -> Self::IntoIter {
+        IterMut::new(self)
     }
 }
 
@@ -294,14 +348,6 @@ mod tests {
             }
             assert_eq!(s.outstanding.load(Ordering::SeqCst), 0);
 
-            {
-                let mut i = (&s).into_iter();
-                i.next();
-                i.next();
-                i.next();
-                assert_eq!(i.next(), None);
-            }
-
             let first = s.lend(1).unwrap();
             assert_eq!(s.outstanding.load(Ordering::SeqCst), 1);
             assert_eq!(*first, "test-even more");
@@ -313,6 +359,23 @@ mod tests {
             assert!(!s.contains_key(2));
         }
         assert_eq!(s.outstanding.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn iters() {
+        let mut s: LendingLibrary<i64, i64> = LendingLibrary::new();
+        s.insert(1, 1);
+        s.insert(2, 1);
+        s.insert(3, 1);
+
+        for (_k, v) in s.iter_mut() {
+            assert_eq!(*v, 1);
+            *v = 2;
+        }
+
+        for (_k, v) in s.iter() {
+            assert_eq!(*v, 2);
+        }
     }
 
     #[test]
@@ -460,6 +523,17 @@ mod tests {
         s.insert(1, String::from("test"));
         let _v = s.lend(1);
         for _ in &s {
+            println!("a");
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "Trying to iterate over a store with loaned items.")]
+    fn no_iter_mut_loaned() {
+        let mut s: LendingLibrary<i64, String> = LendingLibrary::new();
+        s.insert(1, String::from("test"));
+        let _v = s.lend(1);
+        for _ in &mut s {
             println!("a");
         }
     }
