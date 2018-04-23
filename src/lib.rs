@@ -62,6 +62,28 @@ where
         self.store.shrink_to_fit()
     }
 
+    pub fn len(&self) -> usize {
+        self.store
+            .iter()
+            .map(|(_k, v)| match *v {
+                Present(_) | Loaned => 1,
+                AwaitingDrop => 0,
+            })
+            .sum()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn clear(&mut self) {
+        self.store.retain(|_k, v| match *v {
+            Present(_) => false,
+            AwaitingDrop => true,
+            Loaned => panic!("Trying to clear while values loaned."),
+        })
+    }
+
     pub fn contains_key(&self, key: K) -> bool {
         match self.store.get(&key) {
             Some(v) => match *v {
@@ -71,19 +93,14 @@ where
             None => false,
         }
     }
-    pub fn insert(&mut self, key: K, val: V) {
-        match self.store.entry(key) {
-            Entry::Vacant(e) => {
-                e.insert(Present(val));
-            }
-            Entry::Occupied(mut e) => {
-                let prev = e.insert(Present(val));
-                match prev {
-                    Present(_) => {}
-                    Loaned => panic!("Cannot overwrite loaned value"),
-                    AwaitingDrop => panic!("Cannot overwrite value awaiting drop"),
-                }
-            }
+    pub fn insert(&mut self, key: K, val: V) -> Option<V> {
+        match self.store.insert(key, Present(val)) {
+            Some(v) => match v {
+                Present(v) => Some(v),
+                Loaned => panic!("Cannot overwrite loaned value"),
+                AwaitingDrop => panic!("Cannot overwrite value awaiting drop"),
+            },
+            None => None,
         }
     }
     pub fn remove(&mut self, key: K) -> bool {
@@ -308,6 +325,37 @@ mod tests {
         assert!(s.capacity() >= 10);
         s.shrink_to_fit();
         assert_eq!(s.capacity(), 0);
+    }
+
+    #[test]
+    fn lengths() {
+        let mut s: LendingLibrary<i64, i64> = LendingLibrary::new();
+        assert_eq!(s.len(), 0);
+        assert!(s.is_empty());
+        s.insert(1, 1);
+        s.insert(2, 1);
+        assert_eq!(s.len(), 2);
+        assert!(!s.is_empty());
+        {
+            let _v = s.lend(1);
+            assert_eq!(s.len(), 2);
+            assert!(!s.is_empty());
+            s.remove(1);
+            assert_eq!(s.len(), 1);
+            assert!(!s.is_empty());
+            s.clear();
+        }
+        assert_eq!(s.len(), 0);
+        assert!(s.is_empty());
+    }
+
+    #[test]
+    #[should_panic(expected = "Trying to clear while values loaned.")]
+    fn clear_while_loan() {
+        let mut s: LendingLibrary<i64, i64> = LendingLibrary::new();
+        s.insert(1, 1);
+        let _v = s.lend(1);
+        s.clear();
     }
 
     #[test]
