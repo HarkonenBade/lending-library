@@ -291,6 +291,16 @@ where
     }
 }
 
+impl<K, V> PartialEq for DropGuard<K, V>
+where
+    K: Hash + Eq + Copy,
+    V: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.inner == other.inner
+    }
+}
+
 impl<K, V> Drop for DropGuard<K, V>
 where
     K: Hash + Eq + Copy,
@@ -333,6 +343,10 @@ mod tests {
     fn basic_use() {
         let mut s: LendingLibrary<i64, String> = LendingLibrary::new();
         assert_eq!(s.outstanding.load(Ordering::SeqCst), 0);
+
+        assert_eq!(s.lend(25), None);
+        assert!(!s.remove(25));
+
         {
             s.insert(1, String::from("test"));
             assert!(s.contains_key(1));
@@ -483,8 +497,11 @@ mod tests {
     fn remove_indempotent() {
         let mut s: LendingLibrary<i64, String> = LendingLibrary::new();
         s.insert(1, String::from("test"));
+        assert!(s.contains_key(1));
         let _a = s.lend(1).unwrap();
+        assert!(s.contains_key(1));
         assert!(s.remove(1));
+        assert!(!s.contains_key(1));
         for _ in 0..100 {
             assert!(!s.remove(1));
         }
