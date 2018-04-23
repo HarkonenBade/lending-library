@@ -9,6 +9,7 @@ Its licensing is governed by the LICENSE file at the root of the project.
 
 use std::{cmp::Eq,
           collections::{hash_map::Entry, HashMap},
+          fmt::{Debug, Error as FmtError, Formatter},
           hash::Hash,
           ops::{Deref, DerefMut},
           sync::atomic::{AtomicUsize, Ordering},
@@ -189,6 +190,16 @@ where
     inner: Option<V>,
 }
 
+impl<K, V> Debug for DropGuard<K, V>
+where
+    K: Hash + Eq + Copy,
+    V: Debug,
+{
+    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
+        <V as Debug>::fmt(self, f)
+    }
+}
+
 impl<K, V> Drop for DropGuard<K, V>
 where
     K: Hash + Eq + Copy,
@@ -257,6 +268,9 @@ mod tests {
             let first = s.lend(1).unwrap();
             assert_eq!(s.outstanding.load(Ordering::SeqCst), 1);
             assert_eq!(*first, "test-even more");
+
+            assert_eq!(format!("{:?}", first), format!("{:?}", "test-even more"));
+
             s.insert(2, String::from("insert test"));
             assert!(s.remove(2));
             assert!(!s.contains_key(2));
