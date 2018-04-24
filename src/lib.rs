@@ -8,12 +8,13 @@ Its licensing is governed by the LICENSE file at the root of the project.
 */
 
 pub mod iter;
+mod loan;
+
+pub use loan::Loan;
 
 use std::{cmp::Eq,
           collections::{hash_map::Entry, HashMap},
-          fmt::{Debug, Error as FmtError, Formatter},
           hash::Hash,
-          ops::{Deref, DerefMut},
           sync::atomic::{AtomicUsize, Ordering},
           thread};
 
@@ -180,68 +181,6 @@ where
                 panic!("{} value loans outlived store.", count)
             }
         }
-    }
-}
-
-pub struct Loan<K, V>
-where
-    K: Hash + Eq + Copy,
-{
-    owner: *mut LendingLibrary<K, V>,
-    key: Option<K>,
-    inner: Option<V>,
-}
-
-impl<K, V> Debug for Loan<K, V>
-where
-    K: Hash + Eq + Copy,
-    V: Debug,
-{
-    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
-        <V as Debug>::fmt(self, f)
-    }
-}
-
-impl<K, V> PartialEq for Loan<K, V>
-where
-    K: Hash + Eq + Copy,
-    V: PartialEq,
-{
-    fn eq(&self, other: &Self) -> bool {
-        self.inner == other.inner
-    }
-}
-
-impl<K, V> Drop for Loan<K, V>
-where
-    K: Hash + Eq + Copy,
-{
-    fn drop(&mut self) {
-        if self.inner.is_some() && !thread::panicking() {
-            unsafe {
-                (*self.owner).checkin(self.key.take().unwrap(), self.inner.take().unwrap());
-            }
-        }
-    }
-}
-
-impl<K, V> Deref for Loan<K, V>
-where
-    K: Hash + Eq + Copy,
-{
-    type Target = V;
-
-    fn deref(&self) -> &V {
-        self.inner.as_ref().unwrap()
-    }
-}
-
-impl<K, V> DerefMut for Loan<K, V>
-where
-    K: Hash + Eq + Copy,
-{
-    fn deref_mut(&mut self) -> &mut V {
-        self.inner.as_mut().unwrap()
     }
 }
 
