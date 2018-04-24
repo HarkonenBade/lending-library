@@ -1,3 +1,12 @@
+/* Notice
+iter.rs: lending-library
+
+Copyright 2018 Thomas Bytheway <thomas.bytheway@cl.cam.ac.uk>
+
+This file is part of the lending-library open-source project: github.com/harkonenbade/lending-library;
+Its licensing is governed by the LICENSE file at the root of the project.
+*/
+
 use super::{LendingLibrary, State};
 use std::hash::Hash;
 
