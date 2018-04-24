@@ -1,6 +1,6 @@
 [package]
 name = "lending-library"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Thomas Bytheway <tb403@cam.ac.uk>"]
 description = "A key-value store that loans full ownership of items."
 documentation = "https://docs.rs/lending-library/"
