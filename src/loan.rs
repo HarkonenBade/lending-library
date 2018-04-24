@@ -13,6 +13,7 @@ use std::{fmt::{Debug, Error as FmtError, Formatter},
           ops::{Deref, DerefMut},
           thread};
 
+/// A smart pointer representing the loan of a key/value pair from a `LendingLibrary` instance.
 pub struct Loan<K, V>
 where
     K: Hash + Eq + Copy,

@@ -7,9 +7,8 @@ This file is part of the lending-library open-source project: github.com/harkone
 Its licensing is governed by the LICENSE file at the root of the project.
 */
 
-use super::Loan;
-use super::LendingLibrary;
-use super::Ordering;
+use super::{LendingLibrary, Loan};
+use std::sync::atomic::Ordering;
 
 #[test]
 fn basic_use() {
