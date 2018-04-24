@@ -7,6 +7,8 @@ This file is part of the lending-library open-source project: github.com/harkone
 Its licensing is governed by the LICENSE file at the root of the project.
 */
 
+pub mod iter;
+
 use std::{cmp::Eq,
           collections::{hash_map::Entry, HashMap},
           fmt::{Debug, Error as FmtError, Formatter},
@@ -62,11 +64,11 @@ where
         self.store.shrink_to_fit()
     }
 
-    pub fn iter<'a>(&'a self) -> Iter<'a, K, V> {
+    pub fn iter(&self) -> iter::Iter<K, V> {
         self.into_iter()
     }
 
-    pub fn iter_mut<'a>(&'a mut self) -> IterMut<'a, K, V> {
+    pub fn iter_mut(&mut self) -> iter::IterMut<K, V> {
         self.into_iter()
     }
 
@@ -164,98 +166,6 @@ where
             }
             Entry::Vacant(_) => panic!("Returning item not from store"),
         }
-    }
-}
-
-pub struct Iter<'a, K, V>
-where
-    K: Hash + Eq + Copy + 'a,
-    V: 'a,
-{
-    iter: Box<Iterator<Item = (&'a K, &'a V)> + 'a>,
-}
-
-impl<'a, K, V> Iter<'a, K, V>
-where
-    K: Hash + Eq + Copy + 'a,
-    V: 'a,
-{
-    fn new(val: &'a LendingLibrary<K, V>) -> Self {
-        Iter {
-            iter: Box::new(val.store.iter().map(|(k, v)| match *v {
-                State::Present(ref v) => (k, v),
-                _ => panic!("Trying to iterate over a store with loaned items."),
-            })),
-        }
-    }
-}
-
-impl<'a, K, V> Iterator for Iter<'a, K, V>
-where
-    K: Hash + Eq + Copy + 'a,
-    V: 'a,
-{
-    type Item = (&'a K, &'a V);
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next()
-    }
-}
-
-pub struct IterMut<'a, K, V>
-where
-    K: Hash + Eq + Copy + 'a,
-    V: 'a,
-{
-    iter: Box<Iterator<Item = (&'a K, &'a mut V)> + 'a>,
-}
-
-impl<'a, K, V> IterMut<'a, K, V>
-where
-    K: Hash + Eq + Copy + 'a,
-    V: 'a,
-{
-    fn new(val: &'a mut LendingLibrary<K, V>) -> Self {
-        IterMut {
-            iter: Box::new(val.store.iter_mut().map(|(k, v)| match *v {
-                State::Present(ref mut v) => (k, v),
-                _ => panic!("Trying to iterate over a store with loaned items."),
-            })),
-        }
-    }
-}
-
-impl<'a, K, V> Iterator for IterMut<'a, K, V>
-where
-    K: Hash + Eq + Copy + 'a,
-    V: 'a,
-{
-    type Item = (&'a K, &'a mut V);
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next()
-    }
-}
-
-impl<'a, K, V> IntoIterator for &'a LendingLibrary<K, V>
-where
-    K: Hash + Eq + Copy + 'a,
-    V: 'a,
-{
-    type Item = (&'a K, &'a V);
-    type IntoIter = Iter<'a, K, V>;
-    fn into_iter(self) -> Self::IntoIter {
-        Iter::new(self)
-    }
-}
-
-impl<'a, K, V> IntoIterator for &'a mut LendingLibrary<K, V>
-where
-    K: Hash + Eq + Copy + 'a,
-    V: 'a,
-{
-    type Item = (&'a K, &'a mut V);
-    type IntoIter = IterMut<'a, K, V>;
-    fn into_iter(self) -> Self::IntoIter {
-        IterMut::new(self)
     }
 }
 
