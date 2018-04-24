@@ -31,7 +31,6 @@ enum State<V> {
 
 use self::State::{AwaitingDrop, Loaned, Present};
 
-#[derive(Default)]
 /// A key-value data store that allows you to loan temporary ownership of values.
 ///
 /// # Assumptions
@@ -332,5 +331,14 @@ where
                 panic!("{} value loans outlived store.", count)
             }
         }
+    }
+}
+
+impl<K, V> Default for LendingLibrary<K, V>
+where
+    K: Hash + Eq + Copy,
+{
+    fn default() -> Self {
+        LendingLibrary::new()
     }
 }
