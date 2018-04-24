@@ -90,11 +90,15 @@ where
     }
 
     pub fn clear(&mut self) {
-        self.store.retain(|_k, v| match *v {
-            Present(_) => false,
-            AwaitingDrop => true,
-            Loaned => panic!("Trying to clear while values loaned."),
-        })
+        let new_store = self.store
+            .drain()
+            .filter(|&(_k, ref v)| match *v {
+                Present(_) => false,
+                Loaned | AwaitingDrop => true,
+            })
+            .map(|(k, _v)| (k, AwaitingDrop))
+            .collect();
+        self.store = new_store;
     }
 
     pub fn contains_key(&self, key: K) -> bool {

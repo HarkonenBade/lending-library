@@ -99,15 +99,6 @@ fn lengths() {
 }
 
 #[test]
-#[should_panic(expected = "Trying to clear while values loaned.")]
-fn clear_while_loan() {
-    let mut s: LendingLibrary<i64, i64> = LendingLibrary::new();
-    s.insert(1, 1);
-    let _v = s.lend(1);
-    s.clear();
-}
-
-#[test]
 #[should_panic(expected = "1 value loans outlived store.")]
 fn failure_to_return() {
     {
