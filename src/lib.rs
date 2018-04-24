@@ -127,7 +127,8 @@ where
             Entry::Vacant(_) => false,
         }
     }
-    pub fn lend(&mut self, key: K) -> Option<DropGuard<K, V>> {
+
+    pub fn lend(&mut self, key: K) -> Option<Loan<K, V>> {
         let ptr: *mut Self = self;
         match self.store.entry(key) {
             Entry::Occupied(mut e) => {
@@ -135,7 +136,7 @@ where
                 match v {
                     Present(val) => {
                         self.outstanding.fetch_add(1, Ordering::Relaxed);
-                        Some(DropGuard {
+                        Some(Loan {
                             owner: ptr,
                             key: Some(key),
                             inner: Some(val),
@@ -272,7 +273,7 @@ where
     }
 }
 
-pub struct DropGuard<K, V>
+pub struct Loan<K, V>
 where
     K: Hash + Eq + Copy,
 {
@@ -281,7 +282,7 @@ where
     inner: Option<V>,
 }
 
-impl<K, V> Debug for DropGuard<K, V>
+impl<K, V> Debug for Loan<K, V>
 where
     K: Hash + Eq + Copy,
     V: Debug,
@@ -291,7 +292,7 @@ where
     }
 }
 
-impl<K, V> PartialEq for DropGuard<K, V>
+impl<K, V> PartialEq for Loan<K, V>
 where
     K: Hash + Eq + Copy,
     V: PartialEq,
@@ -301,7 +302,7 @@ where
     }
 }
 
-impl<K, V> Drop for DropGuard<K, V>
+impl<K, V> Drop for Loan<K, V>
 where
     K: Hash + Eq + Copy,
 {
@@ -314,7 +315,7 @@ where
     }
 }
 
-impl<K, V> Deref for DropGuard<K, V>
+impl<K, V> Deref for Loan<K, V>
 where
     K: Hash + Eq + Copy,
 {
@@ -325,7 +326,7 @@ where
     }
 }
 
-impl<K, V> DerefMut for DropGuard<K, V>
+impl<K, V> DerefMut for Loan<K, V>
 where
     K: Hash + Eq + Copy,
 {
@@ -336,7 +337,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::DropGuard;
+    use super::Loan;
     use super::LendingLibrary;
     use super::Ordering;
     #[test]
@@ -453,7 +454,7 @@ mod tests {
         s.insert(1, String::from("test"));
         {
             let _v = s.lend(1);
-            let _v2 = DropGuard {
+            let _v2 = Loan {
                 owner: &mut s as *mut LendingLibrary<i64, String>,
                 key: Some(1),
                 inner: Some(String::from("test")),
@@ -466,7 +467,7 @@ mod tests {
     fn returning_none_store() {
         let mut s: LendingLibrary<i64, String> = LendingLibrary::new();
         {
-            let _v = DropGuard {
+            let _v = Loan {
                 owner: &mut s as *mut LendingLibrary<i64, String>,
                 key: Some(1),
                 inner: Some(String::from("boo")),
