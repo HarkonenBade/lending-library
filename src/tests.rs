@@ -15,16 +15,16 @@ fn basic_use() {
     let mut s: LendingLibrary<i64, String> = LendingLibrary::new();
     assert_eq!(s.outstanding.load(Ordering::SeqCst), 0);
 
-    assert_eq!(s.lend(25), None);
-    assert!(!s.remove(25));
+    assert_eq!(s.lend(&25), None);
+    assert!(!s.remove(&25));
 
     {
         s.insert(1, String::from("test"));
-        assert!(s.contains_key(1));
+        assert!(s.contains_key(&1));
         s.insert(2, String::from("double test"));
         assert_eq!(s.outstanding.load(Ordering::SeqCst), 0);
         {
-            let mut first = s.lend(1).unwrap();
+            let mut first = s.lend(&1).unwrap();
             assert_eq!(s.outstanding.load(Ordering::SeqCst), 1);
             s.insert(3, String::from("even more test"));
             assert_eq!(*first, "test");
@@ -33,15 +33,15 @@ fn basic_use() {
         }
         assert_eq!(s.outstanding.load(Ordering::SeqCst), 0);
 
-        let first = s.lend(1).unwrap();
+        let first = s.lend(&1).unwrap();
         assert_eq!(s.outstanding.load(Ordering::SeqCst), 1);
         assert_eq!(*first, "test-even more");
 
         assert_eq!(format!("{:?}", first), format!("{:?}", "test-even more"));
 
         s.insert(2, String::from("insert test"));
-        assert!(s.remove(2));
-        assert!(!s.contains_key(2));
+        assert!(s.remove(&2));
+        assert!(!s.contains_key(&2));
     }
     assert_eq!(s.outstanding.load(Ordering::SeqCst), 0);
 }
@@ -85,10 +85,10 @@ fn lengths() {
     assert_eq!(s.len(), 2);
     assert!(!s.is_empty());
     {
-        let _v = s.lend(1);
+        let _v = s.lend(&1);
         assert_eq!(s.len(), 2);
         assert!(!s.is_empty());
-        s.remove(1);
+        s.remove(&1);
         assert_eq!(s.len(), 1);
         assert!(!s.is_empty());
         s.clear();
@@ -103,7 +103,7 @@ fn failure_to_return() {
     {
         let mut s: LendingLibrary<i64, String> = LendingLibrary::new();
         s.insert(1, String::from("test"));
-        let _v = s.lend(1).unwrap();
+        let _v = s.lend(&1).unwrap();
         drop(s);
     }
 }
@@ -114,10 +114,10 @@ fn double_reinsert() {
     let mut s: LendingLibrary<i64, String> = LendingLibrary::new();
     s.insert(1, String::from("test"));
     {
-        let _v = s.lend(1);
+        let _v = s.lend(&1);
         let _v2 = Loan {
             owner: &mut s as *mut LendingLibrary<i64, String>,
-            key: Some(1),
+            key: _v.unwrap().key,
             inner: Some(String::from("test")),
         };
     }
@@ -130,7 +130,7 @@ fn returning_none_store() {
     {
         let _v = Loan {
             owner: &mut s as *mut LendingLibrary<i64, String>,
-            key: Some(1),
+            key: 0,
             inner: Some(String::from("boo")),
         };
     }
@@ -141,8 +141,8 @@ fn returning_none_store() {
 fn double_checkout() {
     let mut s: LendingLibrary<i64, String> = LendingLibrary::new();
     s.insert(1, String::from("test"));
-    let _a = s.lend(1).unwrap();
-    let _b = s.lend(1).unwrap();
+    let _a = s.lend(&1).unwrap();
+    let _b = s.lend(&1).unwrap();
 }
 
 #[test]
@@ -150,22 +150,22 @@ fn double_checkout() {
 fn double_checkout_drop() {
     let mut s: LendingLibrary<i64, String> = LendingLibrary::new();
     s.insert(1, String::from("test"));
-    let _a = s.lend(1).unwrap();
-    s.remove(1);
-    let _b = s.lend(1).unwrap();
+    let _a = s.lend(&1).unwrap();
+    s.remove(&1);
+    let _b = s.lend(&1).unwrap();
 }
 
 #[test]
 fn remove_indempotent() {
     let mut s: LendingLibrary<i64, String> = LendingLibrary::new();
     s.insert(1, String::from("test"));
-    assert!(s.contains_key(1));
-    let _a = s.lend(1).unwrap();
-    assert!(s.contains_key(1));
-    assert!(s.remove(1));
-    assert!(!s.contains_key(1));
+    assert!(s.contains_key(&1));
+    let _a = s.lend(&1).unwrap();
+    assert!(s.contains_key(&1));
+    assert!(s.remove(&1));
+    assert!(!s.contains_key(&1));
     for _ in 0..100 {
-        assert!(!s.remove(1));
+        assert!(!s.remove(&1));
     }
 }
 
@@ -181,7 +181,7 @@ fn double_insert() {
 fn double_insert_loaned() {
     let mut s: LendingLibrary<i64, String> = LendingLibrary::new();
     s.insert(1, String::from("test"));
-    let _v = s.lend(1);
+    let _v = s.lend(&1);
     s.insert(1, String::from("test"));
 }
 
@@ -190,8 +190,8 @@ fn double_insert_loaned() {
 fn double_insert_drop() {
     let mut s: LendingLibrary<i64, String> = LendingLibrary::new();
     s.insert(1, String::from("test"));
-    let _v = s.lend(1);
-    s.remove(1);
+    let _v = s.lend(&1);
+    s.remove(&1);
     s.insert(1, String::from("test"));
 }
 
@@ -200,7 +200,7 @@ fn double_insert_drop() {
 fn no_iter_loaned() {
     let mut s: LendingLibrary<i64, String> = LendingLibrary::new();
     s.insert(1, String::from("test"));
-    let _v = s.lend(1);
+    let _v = s.lend(&1);
     for _ in &s {
         println!("a");
     }
@@ -211,7 +211,7 @@ fn no_iter_loaned() {
 fn no_iter_mut_loaned() {
     let mut s: LendingLibrary<i64, String> = LendingLibrary::new();
     s.insert(1, String::from("test"));
-    let _v = s.lend(1);
+    let _v = s.lend(&1);
     for _ in &mut s {
         println!("a");
     }

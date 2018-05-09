@@ -54,10 +54,10 @@ impl Store {
     }
 
     pub fn declare(&mut self, uid: i64, dat: &str) -> Loan<i64, Item> {
-        if !self.id_to_dat.contains_key(uid) {
+        if !self.id_to_dat.contains_key(&uid) {
             self.id_to_dat.insert(uid, Item::gen(dat));
         }
-        self.id_to_dat.lend(uid).unwrap()
+        self.id_to_dat.lend(&uid).unwrap()
     }
 }
 

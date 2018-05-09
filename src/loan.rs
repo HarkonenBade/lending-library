@@ -16,16 +16,16 @@ use std::{fmt::{Debug, Error as FmtError, Formatter},
 /// A smart pointer representing the loan of a key/value pair from a `LendingLibrary` instance.
 pub struct Loan<K, V>
 where
-    K: Hash + Eq + Copy,
+    K: Hash,
 {
     pub(super) owner: *mut LendingLibrary<K, V>,
-    pub(super) key: Option<K>,
+    pub(super) key: u64,
     pub(super) inner: Option<V>,
 }
 
 impl<K, V> Debug for Loan<K, V>
 where
-    K: Hash + Eq + Copy,
+    K: Hash,
     V: Debug,
 {
     fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
@@ -35,7 +35,7 @@ where
 
 impl<K, V> PartialEq for Loan<K, V>
 where
-    K: Hash + Eq + Copy,
+    K: Hash,
     V: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
@@ -45,12 +45,12 @@ where
 
 impl<K, V> Drop for Loan<K, V>
 where
-    K: Hash + Eq + Copy,
+    K: Hash,
 {
     fn drop(&mut self) {
         if self.inner.is_some() && !thread::panicking() {
             unsafe {
-                (*self.owner).checkin(self.key.take().unwrap(), self.inner.take().unwrap());
+                (*self.owner).checkin(self.key, self.inner.take().unwrap());
             }
         }
     }
@@ -58,7 +58,7 @@ where
 
 impl<K, V> Deref for Loan<K, V>
 where
-    K: Hash + Eq + Copy,
+    K: Hash,
 {
     type Target = V;
 
@@ -69,7 +69,7 @@ where
 
 impl<K, V> DerefMut for Loan<K, V>
 where
-    K: Hash + Eq + Copy,
+    K: Hash,
 {
     fn deref_mut(&mut self) -> &mut V {
         self.inner.as_mut().unwrap()

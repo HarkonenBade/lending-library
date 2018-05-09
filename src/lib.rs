@@ -56,10 +56,10 @@ Its licensing is governed by the LICENSE file at the root of the project.
 //!     }
 //!
 //!     pub fn declare(&mut self, uid: i64, dat: &str) -> Loan<i64, Item> {
-//!         if !self.id_to_dat.contains_key(uid) {
+//!         if !self.id_to_dat.contains_key(&uid) {
 //!             self.id_to_dat.insert(uid, Item::gen(dat));
 //!         }
-//!         self.id_to_dat.lend(uid).unwrap()
+//!         self.id_to_dat.lend(&uid).unwrap()
 //!     }
 //! }
 //!
@@ -88,16 +88,15 @@ mod tests;
 
 pub use loan::Loan;
 
-use std::{cmp::Eq,
-          collections::{hash_map::Entry, HashMap},
-          hash::Hash,
+use std::{collections::{hash_map::DefaultHasher, HashMap},
+          hash::{Hash, Hasher},
           sync::atomic::{AtomicUsize, Ordering},
           thread};
 
-enum State<V> {
-    Present(V),
-    Loaned,
-    AwaitingDrop,
+enum State<K, V> {
+    Present(K, V),
+    Loaned(K),
+    AwaitingDrop(K),
 }
 
 use self::State::{AwaitingDrop, Loaned, Present};
@@ -113,15 +112,21 @@ use self::State::{AwaitingDrop, Loaned, Present};
 /// panic as it goes out of scope, noting the number of outstanding `Loan` objects.
 pub struct LendingLibrary<K, V>
 where
-    K: Hash + Eq + Copy,
+    K: Hash,
 {
-    store: HashMap<K, State<V>>,
+    store: HashMap<u64, State<K, V>>,
     outstanding: AtomicUsize,
+}
+
+fn _hash<K:Hash>(val: &K) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    (*val).hash(&mut hasher);
+    hasher.finish()
 }
 
 impl<K, V> LendingLibrary<K, V>
 where
-    K: Hash + Eq + Copy,
+    K: Hash,
 {
     /// Creates a new empty `LendingLibrary`.
     /// # Example
@@ -221,8 +226,8 @@ where
         self.store
             .iter()
             .map(|(_k, v)| match *v {
-                Present(_) | Loaned => 1,
-                AwaitingDrop => 0,
+                Present(..) | Loaned(_) => 1,
+                AwaitingDrop(_) => 0,
             })
             .sum()
     }
@@ -249,20 +254,23 @@ where
     /// lib.insert(1, 1);
     /// lib.insert(2, 1);
     /// {
-    ///     let v = lib.lend(2).unwrap();
+    ///     let v = lib.lend(&2).unwrap();
     ///     assert_eq!(*v, 1);
     /// }
     /// lib.clear();
-    /// assert_eq!(lib.lend(1), None);
+    /// assert_eq!(lib.lend(&1), None);
     /// ```
     pub fn clear(&mut self) {
         let new_store = self.store
             .drain()
             .filter(|&(_k, ref v)| match *v {
-                Present(_) => false,
-                Loaned | AwaitingDrop => true,
+                Present(..) => false,
+                Loaned(_) | AwaitingDrop(_) => true,
             })
-            .map(|(k, _v)| (k, AwaitingDrop))
+            .map(|(h, v)| match v {
+                Loaned(k) | AwaitingDrop(k) => (h, AwaitingDrop(k)),
+                Present(..) => unreachable!(),
+            })
             .collect();
         self.store = new_store;
     }
@@ -272,15 +280,16 @@ where
     /// ```
     /// use lending_library::LendingLibrary;
     /// let mut lib: LendingLibrary<i32, i32> = LendingLibrary::new();
-    /// assert!(!lib.contains_key(1));
+    /// assert!(!lib.contains_key(&1));
     /// lib.insert(1, 1);
-    /// assert!(lib.contains_key(1));
+    /// assert!(lib.contains_key(&1));
     /// ```
-    pub fn contains_key(&self, key: K) -> bool {
-        match self.store.get(&key) {
+    pub fn contains_key(&self, key: &K) -> bool {
+        let h = _hash(key);
+        match self.store.get(&h) {
             Some(v) => match *v {
-                Present(_) | Loaned => true,
-                AwaitingDrop => false,
+                Present(..) | Loaned(_) => true,
+                AwaitingDrop(_) => false,
             },
             None => false,
         }
@@ -298,11 +307,12 @@ where
     /// lib.insert(2, 1);
     /// ```
     pub fn insert(&mut self, key: K, val: V) -> Option<V> {
-        match self.store.insert(key, Present(val)) {
+        let h = _hash(&key);
+        match self.store.insert(h, Present(key, val)) {
             Some(v) => match v {
-                Present(v) => Some(v),
-                Loaned => panic!("Cannot overwrite loaned value"),
-                AwaitingDrop => panic!("Cannot overwrite value awaiting drop"),
+                Present(_, v) => Some(v),
+                Loaned(_) => panic!("Cannot overwrite loaned value"),
+                AwaitingDrop(_) => panic!("Cannot overwrite value awaiting drop"),
             },
             None => None,
         }
@@ -314,27 +324,28 @@ where
     /// ```
     /// use lending_library::LendingLibrary;
     /// let mut lib: LendingLibrary<i32, i32> = LendingLibrary::new();
-    /// assert!(!lib.remove(1));
+    /// assert!(!lib.remove(&1));
     /// lib.insert(1, 1);
-    /// assert!(lib.contains_key(1));
-    /// assert!(lib.remove(1));
-    /// assert!(!lib.contains_key(1));
-    /// assert!(!lib.remove(1));
+    /// assert!(lib.contains_key(&1));
+    /// assert!(lib.remove(&1));
+    /// assert!(!lib.contains_key(&1));
+    /// assert!(!lib.remove(&1));
     /// ```
-    pub fn remove(&mut self, key: K) -> bool {
-        match self.store.entry(key) {
-            Entry::Occupied(mut e) => {
-                let v = e.insert(AwaitingDrop);
-                match v {
-                    Present(_) => {
-                        e.remove();
-                        true
-                    }
-                    Loaned => true,
-                    AwaitingDrop => false,
+    pub fn remove(&mut self, key: &K) -> bool {
+        let h = _hash(key);
+        match self.store.remove(&h){
+            Some(v) => match v {
+                Present(..) => true,
+                Loaned(k) => {
+                    self.store.insert(h,AwaitingDrop(k));
+                    true
+                }
+                AwaitingDrop(k) => {
+                    self.store.insert(h,AwaitingDrop(k));
+                    false
                 }
             }
-            Entry::Vacant(_) => false,
+            None => false
         }
     }
 
@@ -347,53 +358,51 @@ where
     /// let mut lib: LendingLibrary<i32, i32> = LendingLibrary::with_capacity(0);
     /// lib.insert(1, 1);
     /// {
-    ///     let mut v = lib.lend(1).unwrap();
+    ///     let mut v = lib.lend(&1).unwrap();
     ///     *v += 5;
     /// }
     /// ```
-    pub fn lend(&mut self, key: K) -> Option<Loan<K, V>> {
+    pub fn lend(&mut self, key: &K) -> Option<Loan<K, V>> {
+        let h = _hash(key);
         let ptr: *mut Self = self;
-        match self.store.entry(key) {
-            Entry::Occupied(mut e) => {
-                let v = e.insert(Loaned);
-                match v {
-                    Present(val) => {
-                        self.outstanding.fetch_add(1, Ordering::Relaxed);
-                        Some(Loan {
-                            owner: ptr,
-                            key: Some(key),
-                            inner: Some(val),
-                        })
-                    }
-                    Loaned => panic!("Lending already loaned value"),
-                    AwaitingDrop => panic!("Lending value awaiting drop"),
+        match self.store.remove(&h){
+            Some(v) => match v {
+                Present(k, v) => {
+                    self.outstanding.fetch_add(1, Ordering::Relaxed);
+                    self.store.insert(h, Loaned(k));
+                    Some(Loan {
+                        owner: ptr,
+                        key: h,
+                        inner: Some(v),
+                    })
                 }
+                Loaned(_) => panic!("Lending already loaned value"),
+                AwaitingDrop(_) => panic!("Lending value awaiting drop"),
             }
-            Entry::Vacant(_) => None,
+            None => None,
         }
     }
 
-    fn checkin(&mut self, key: K, val: V) {
-        match self.store.entry(key) {
-            Entry::Occupied(mut e) => {
+    fn checkin(&mut self, key: u64, val: V) {
+        match self.store.remove(&key) {
+            Some(v) => {
                 self.outstanding.fetch_sub(1, Ordering::Relaxed);
-                let v = e.insert(Present(val));
                 match v {
-                    Present(_) => panic!("Returning replaced item"),
-                    Loaned => {}
-                    AwaitingDrop => {
-                        e.remove();
+                    Present(..) => panic!("Returning replaced item"),
+                    Loaned(k) => {
+                        self.store.insert(key, Present(k, val));
                     }
+                    AwaitingDrop(_) => {},
                 }
             }
-            Entry::Vacant(_) => panic!("Returning item not from store"),
+            None => panic!("Returning item not from store"),
         }
     }
 }
 
 impl<K, V> Drop for LendingLibrary<K, V>
 where
-    K: Hash + Eq + Copy,
+    K: Hash,
 {
     fn drop(&mut self) {
         if !thread::panicking() {
@@ -407,7 +416,7 @@ where
 
 impl<K, V> Default for LendingLibrary<K, V>
 where
-    K: Hash + Eq + Copy,
+    K: Hash,
 {
     fn default() -> Self {
         LendingLibrary::new()

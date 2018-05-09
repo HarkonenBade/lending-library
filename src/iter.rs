@@ -38,14 +38,14 @@ impl<'a, K, V> Iterator for IterMut<'a, K, V> {
 
 impl<'a, K, V> IntoIterator for &'a LendingLibrary<K, V>
 where
-    K: Hash + Eq + Copy,
+    K: Hash,
 {
     type Item = (&'a K, &'a V);
     type IntoIter = Iter<'a, K, V>;
     fn into_iter(self) -> Self::IntoIter {
         Iter {
-            iter: Box::new(self.store.iter().map(|(k, v)| match *v {
-                State::Present(ref v) => (k, v),
+            iter: Box::new(self.store.iter().map(|(_h, v)| match *v {
+                State::Present(ref k, ref v) => (k, v),
                 _ => panic!("Trying to iterate over a store with loaned items."),
             })),
         }
@@ -54,14 +54,14 @@ where
 
 impl<'a, K, V> IntoIterator for &'a mut LendingLibrary<K, V>
 where
-    K: Hash + Eq + Copy,
+    K: Hash,
 {
     type Item = (&'a K, &'a mut V);
     type IntoIter = IterMut<'a, K, V>;
     fn into_iter(self) -> Self::IntoIter {
         IterMut {
-            iter: Box::new(self.store.iter_mut().map(|(k, v)| match *v {
-                State::Present(ref mut v) => (k, v),
+            iter: Box::new(self.store.iter_mut().map(|(_h, v)| match *v {
+                State::Present(ref k, ref mut v) => (k, v),
                 _ => panic!("Trying to iterate over a store with loaned items."),
             })),
         }
