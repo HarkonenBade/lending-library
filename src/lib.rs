@@ -200,7 +200,7 @@ where
     /// # Panics
     /// The iterator will panic if it encounters an item that is currently loaned from the store,
     /// so this should only be used where you are sure you have returned all loaned items.
-    pub fn iter(&self) -> iter::Iter<K, V> {
+    pub fn iter(&self) -> impl Iterator<Item = (&K, &V)> {
         self.into_iter()
     }
 
@@ -209,7 +209,7 @@ where
     /// # Panics
     /// The iterator will panic if it encounters an item that is currently loaned from the store,
     /// so this should only be used where you are sure you have returned all loaned items.
-    pub fn iter_mut(&mut self) -> iter::IterMut<K, V> {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&K, &mut V)> {
         self.into_iter()
     }
 
@@ -225,7 +225,7 @@ where
     pub fn len(&self) -> usize {
         self.store
             .iter()
-            .map(|(_k, v)| match *v {
+            .map(|(_k, v)| match v {
                 Present(..) | Loaned(_) => 1,
                 AwaitingDrop(_) => 0,
             })
@@ -263,7 +263,7 @@ where
     pub fn clear(&mut self) {
         let new_store = self.store
             .drain()
-            .filter(|&(_k, ref v)| match *v {
+            .filter(|&(_k, ref v)| match v {
                 Present(..) => false,
                 Loaned(_) | AwaitingDrop(_) => true,
             })
@@ -287,7 +287,7 @@ where
     pub fn contains_key(&self, key: &K) -> bool {
         let h = _hash(key);
         match self.store.get(&h) {
-            Some(v) => match *v {
+            Some(v) => match v {
                 Present(..) | Loaned(_) => true,
                 AwaitingDrop(_) => false,
             },
