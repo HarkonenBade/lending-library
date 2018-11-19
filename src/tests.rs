@@ -14,7 +14,6 @@ use std::sync::atomic::Ordering;
 fn basic_use() {
     let mut s: LendingLibrary<i64, String> = LendingLibrary::new();
     assert_eq!(s.outstanding.load(Ordering::SeqCst), 0);
-
     assert_eq!(s.lend(&25), None);
     assert!(!s.remove(&25));
 
@@ -215,4 +214,17 @@ fn no_iter_mut_loaned() {
     for _ in &mut s {
         println!("a");
     }
+}
+
+#[test]
+fn merge_libs() {
+    let mut s1: LendingLibrary<i64, String> = LendingLibrary::new();
+    let mut s2: LendingLibrary<i64, String> = LendingLibrary::new();
+    s2.insert(1, String::from("test"));
+    assert!(s2.contains_key(&1));
+    assert!(!s1.contains_key(&1));
+
+    s1.merge(s2);
+
+    assert!(s1.contains_key(&1));
 }

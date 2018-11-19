@@ -383,6 +383,21 @@ where
         }
     }
 
+    /// Merges the values from another instance of LendingLibrary<K, V>, overwriting values with equivalent keys in self.
+    /// # Panics
+    /// Will panic if you merge a store with any outstanding loans, or if the merge attempts to overwrite any loaned values.
+    pub fn merge(&mut self, mut other: LendingLibrary<K, V>) {
+        assert_eq!(other.outstanding.load(Ordering::Relaxed), 0);
+        for (_, s) in other.store.drain() {
+            match s {
+                Present(k, v) => {
+                    self.insert(k, v);
+                },
+                _ => unreachable!(),
+            }
+        }
+    }
+
     fn checkin(&mut self, key: u64, val: V) {
         match self.store.remove(&key) {
             Some(v) => {
